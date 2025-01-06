@@ -47,9 +47,30 @@ CREATE TABLE "OrderDetails" (
     "total_price" NUMERIC(10, 2) NOT NULL CHECK ("total_price" >= 0)
 );
 
+-- Создание таблицы Reviews
+CREATE TABLE "Reviews" (
+    "review_id" SERIAL PRIMARY KEY,
+    "user_id" INT NOT NULL REFERENCES "Users"("user_id") ON DELETE CASCADE,
+    "product_id" INT NOT NULL REFERENCES "Products"("product_id") ON DELETE CASCADE,
+    "rating" INT NOT NULL CHECK ("rating" BETWEEN 1 AND 5),
+    "review_text" TEXT,
+    "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Создание таблицы LoyaltyPoints
+CREATE TABLE "LoyaltyPoints" (
+    "loyalty_id" SERIAL PRIMARY KEY,
+    "user_id" INT NOT NULL REFERENCES "Users"("user_id") ON DELETE CASCADE,
+    "points" INT NOT NULL,
+    "reason" VARCHAR(255) NOT NULL,
+    "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 -- Индексы для ускорения выборок
 CREATE INDEX "idx_users_email" ON "Users"("email");
 CREATE INDEX "idx_products_category_id" ON "Products"("category_id");
 CREATE INDEX "idx_orders_user_id" ON "Orders"("user_id");
 CREATE INDEX "idx_orderdetails_order_id" ON "OrderDetails"("order_id");
 CREATE INDEX "idx_orderdetails_product_id" ON "OrderDetails"("product_id");
+CREATE INDEX "idx_reviews_user_id" ON "Reviews"("user_id");
+CREATE INDEX "idx_reviews_product_id" ON "Reviews"("product_id");
+CREATE INDEX "idx_loyalty_points_user_id" ON "LoyaltyPoints"("user_id");

@@ -1,6 +1,8 @@
 from faker import Faker
 import random
-from database.models import User, ProductCategory, Product, Order, OrderDetail
+from database.models import User, ProductCategory, Product, Order, OrderDetail, Review, LoyaltyPoint
+from schemas.loyalty_schema import LoyaltyPointCreate
+from schemas.review_schema import ReviewCreate
 from schemas.user_schema import UserCreate
 from schemas.category_schema import CategoryCreate
 from schemas.product_schema import ProductCreate
@@ -19,11 +21,13 @@ def clean_phone(phone: str) -> str:
     return cleaned[:20]
 
 
-def clear_database(session: Session):
+def clear_database(session):
     """Очистка всех данных из базы перед генерацией."""
     print("Очистка базы данных...")
     session.execute(text("TRUNCATE TABLE \"OrderDetails\" CASCADE;"))
     session.execute(text("TRUNCATE TABLE \"Orders\" CASCADE;"))
+    session.execute(text("TRUNCATE TABLE \"Reviews\" CASCADE;"))
+    session.execute(text("TRUNCATE TABLE \"LoyaltyPoints\" CASCADE;"))
     session.execute(text("TRUNCATE TABLE \"Products\" CASCADE;"))
     session.execute(text("TRUNCATE TABLE \"ProductCategories\" CASCADE;"))
     session.execute(text("TRUNCATE TABLE \"Users\" CASCADE;"))
@@ -185,7 +189,37 @@ def generate_data():
                 session.add(order_detail)
 
         session.commit()
-        print("Генерация заказов завершена!")
+
+        # Генерация отзывов
+        print("Генерация отзывов...")
+        for _ in range(DATA_GENERATION_CONFIG["reviews_count"]):
+            user_id = random.choice(user_ids)
+            product_id = random.choice(product_ids)
+            review_data = {
+                "user_id": user_id,
+                "product_id": product_id,
+                "rating": random.randint(1, 5),
+                "review_text": fake.text(max_nb_chars=200)
+            }
+            review_schema = ReviewCreate(**review_data)
+            review = Review(**review_schema.model_dump())
+            session.add(review)
+        session.commit()
+
+        # Генерация бонусных баллов
+        print("Генерация бонусных баллов...")
+        for _ in range(DATA_GENERATION_CONFIG["loyalty_points_count"]):
+            user_id = random.choice(user_ids)
+            loyalty_data = {
+                "user_id": user_id,
+                "points": random.randint(10, 500),
+                "reason": random.choice(["Order", "Promotion", "Event Participation"])
+            }
+            loyalty_schema = LoyaltyPointCreate(**loyalty_data)
+            loyalty_point = LoyaltyPoint(**loyalty_schema.model_dump())
+            session.add(loyalty_point)
+        session.commit()
+
         print("Данные успешно сгенерированы!")
 
     except Exception as e:

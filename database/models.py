@@ -18,6 +18,10 @@ class User(Base):
 
     # Связь с заказами
     orders = relationship("Order", back_populates="user")
+    # Связь с отзывами
+    reviews = relationship("Review", back_populates="user", cascade="all, delete-orphan")
+    # Связь с бонусами
+    loyalty_points = relationship("LoyaltyPoint", back_populates="user", cascade="all, delete-orphan")
 
 
 # Модель категорий товаров
@@ -49,7 +53,8 @@ class Product(Base):
     category = relationship("ProductCategory", back_populates="products")
     # Связь с деталями заказа
     order_details = relationship("OrderDetail", back_populates="product")
-
+    # Связь с отзывами
+    reviews = relationship("Review", back_populates="product", cascade="all, delete-orphan")
 
 # Модель заказов
 class Order(Base):
@@ -86,3 +91,29 @@ class OrderDetail(Base):
 
     order = relationship("Order", back_populates="order_details")
     product = relationship("Product")
+
+# Модель отзыва о продукте
+class Review(Base):
+    __tablename__ = "Reviews"
+
+    review_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("Users.user_id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(Integer, ForeignKey("Products.product_id", ondelete="CASCADE"), nullable=False)
+    rating = Column(Integer, nullable=False)  # Рейтинг от 1 до 5
+    review_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="reviews")
+    product = relationship("Product", back_populates="reviews")
+
+# Модель бонусных баллов
+class LoyaltyPoint(Base):
+    __tablename__ = "LoyaltyPoints"
+
+    loyalty_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("Users.user_id", ondelete="CASCADE"), nullable=False)
+    points = Column(Integer, nullable=False)
+    reason = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="loyalty_points")
