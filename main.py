@@ -1,5 +1,5 @@
-from database.models import Base
-from database.db_config import engine
+from postgresdb.models import Base
+from postgresdb.db_config import engine
 from data_generation.generator import generate_data
 
 if __name__ == "__main__":

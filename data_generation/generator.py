@@ -1,13 +1,13 @@
 from faker import Faker
 import random
-from database.models import User, ProductCategory, Product, Order, OrderDetail, Review, LoyaltyPoint
-from schemas.loyalty_schema import LoyaltyPointCreate
-from schemas.review_schema import ReviewCreate
-from schemas.user_schema import UserCreate
-from schemas.category_schema import CategoryCreate
-from schemas.product_schema import ProductCreate
-from schemas.order_schema import OrderCreate, OrderDetailCreate
-from database.db_config import get_session
+from postgresdb.models import User, ProductCategory, Product, Order, OrderDetail, Review, LoyaltyPoint
+from postgresdb_schemas.loyalty_schema import LoyaltyPointCreate
+from postgresdb_schemas.review_schema import ReviewCreate
+from postgresdb_schemas.user_schema import UserCreate
+from postgresdb_schemas.category_schema import CategoryCreate
+from postgresdb_schemas.product_schema import ProductCreate
+from postgresdb_schemas.order_schema import OrderCreate, OrderDetailCreate
+from postgresdb.db_config import get_session
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import timedelta
