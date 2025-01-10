@@ -299,6 +299,6 @@ DE2024_PY_CourseWork/
 │   │       ├── helpers/        
 │   │       └── pyspark_scripts/ 
 │   ├── datagen/        # Генераторы данных
-│   │   ├── pg_datagen/ # Скрипты для генерации данных в PG
+│   │   ├── datagen_postgres/ # Скрипты для генерации данных в PG
 │   │   └── kafka_datagen/ # Скрипты для генерации данных в Kafka
 ```
