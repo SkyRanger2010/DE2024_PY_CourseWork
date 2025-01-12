@@ -252,7 +252,6 @@ DE2024_PY_CourseWork/
 │   └── spark/                # Конфигурация Spark   
 │       ├── spark-master/
 │       └── spark-worker/
-├── logs  # Логи контейнеров
 └── python-scripts/           # Исходный код
     ├── airflow/              # DAG и скрипты для Airflow
     │   ├── dags/       
