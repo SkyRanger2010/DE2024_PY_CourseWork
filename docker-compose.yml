@@ -31,15 +31,22 @@ x-spark-common-env: &spark-common-env
   SPARK_RPC_ENCRYPTION_ENABLED: ${SPARK_RPC_ENCRYPTION_ENABLED}
   SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: ${SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED}
   SPARK_SSL_ENABLED: ${SPARK_SSL_ENABLED}
+  SPARK_WORKERS: ${SPARK_WORKERS}
+  SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
+  SPARK_EXECUTOR_MEMORY: ${SPARK_EXECUTOR_MEMORY}
+  SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
+  SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
 
 x-kafka-common-env: &kafka-common-env
   KAFKA_INTERNAL_CONNECT_PATH: ${KAFKA_INTERNAL_CONNECT_PATH}
-  KAFKA_TOPIC_NAME: ${KAFKA_TOPIC_NAME}
+  KAFKA_USER_TOPIC_NAME: ${KAFKA_USER_TOPIC_NAME}
+  KAFKA_REVIEW_TOPIC_NAME: ${KAFKA_REVIEW_TOPIC_NAME}
+
 
 services:
   # RDBMS
   postgresql:
-    build: ./infra/db/postgresql
+    build: docker-containers/db/postgresql
     container_name: postgresql
     environment:
       <<: *pg-connect
@@ -63,7 +70,7 @@ services:
           memory: 512M
 
   mysql:
-    build: ./infra/db/mysql
+    build: docker-containers/db/mysql
     container_name: mysql
     environment:
       <<: *mysql-connect
@@ -88,7 +95,7 @@ services:
 
   # ZK & Kafka
   zookeeper:
-    build: ./infra/messaging/zookeeper
+    build: docker-containers/messaging/zookeeper
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: '2181'
@@ -107,7 +114,7 @@ services:
           memory: 512M
 
   kafka:
-    build: ./infra/messaging/kafka
+    build: docker-containers/messaging/kafka
     hostname: kafka
     container_name: kafka
     depends_on:
@@ -135,8 +142,32 @@ services:
           cpus: '0.5'
           memory: 512M
 
+  kafka-consumer:
+    build: docker-containers/messaging/kafka-consumer
+    container_name: kafka-consumer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgresql:
+        condition: service_healthy
+      kafka-producer:
+        condition: service_started
+    environment:
+      <<: [*kafka-common-env, *pg-connect]
+      KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP}
+      KAFKA_CONSUMER_AUTO_OFFSET_RESET: ${KAFKA_CONSUMER_AUTO_OFFSET_RESET}
+    volumes:
+      - ./python-scripts/kafka-consumer:/app/src
+      - ./logs/kafka-consumer:/app/logs
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+
   kafka-init:
-    build: ./infra/messaging/kafka_init
+    build: docker-containers/messaging/kafka_init
     container_name: kafka-init
     depends_on:
       kafka:
@@ -151,20 +182,17 @@ services:
     
   # Spark
   spark-master:
-    build: ./infra/spark/spark-master
+    build: docker-containers/spark/spark-master
     container_name: spark-master
     environment:
       <<: *spark-common-env
       SPARK_MODE: master
       SPARK_MASTER_WEBUI_PORT: 8081
-      SPARK_DRIVER_MEMORY: 2g
-      SPARK_EXECUTOR_MEMORY: 2g
-      SPARK_WORKER_CORES: 2
-      SPARK_WORKER_MEMORY: 2g
     ports:
       - "8081:8081"
     volumes:
-      - spark-data:/bitnami
+      - spark-data:/opt/bitnami
+      - ./logs/spark:/opt/bitnami/spark/logs
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8081"]
       interval: 10s
@@ -176,74 +204,29 @@ services:
           cpus: '2'
           memory: 2G
 
-  spark-worker1:
-    build: ./infra/spark/spark-worker
-    container_name: spark-worker1
+  spark-worker:
+    build: docker-containers/spark/spark-worker
     environment:
       <<: *spark-common-env
       SPARK_MODE: worker
       SPARK_MASTER_URL: spark://${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT}
-      SPARK_DRIVER_MEMORY: 2g
-      SPARK_EXECUTOR_MEMORY: 2g
-      SPARK_WORKER_CORES: 2
-      SPARK_WORKER_MEMORY: 2g
     volumes:
-      - spark-data:/bitnami
+      - spark-data:/opt/bitnami
+      - ./logs/spark:/opt/bitnami/spark/logs
     depends_on:
       spark-master:
         condition: service_healthy
     deploy:
+      replicas: ${SPARK_WORKERS:-1}
       resources:
         limits:
           cpus: '2'
           memory: 2G
 
-  spark-worker2:
-    build: ./infra/spark/spark-worker
-    container_name: spark-worker2
-    environment:
-      <<: *spark-common-env
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT}
-      SPARK_DRIVER_MEMORY: 2g
-      SPARK_EXECUTOR_MEMORY: 2g
-      SPARK_WORKER_CORES: 2
-      SPARK_WORKER_MEMORY: 2g
-    volumes:
-      - spark-data:/bitnami
-    depends_on:
-      spark-master:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
 
-  spark-worker3:
-    build: ./infra/spark/spark-worker
-    container_name: spark-worker3
-    environment:
-      <<: *spark-common-env
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT}
-      SPARK_DRIVER_MEMORY: 2g
-      SPARK_EXECUTOR_MEMORY: 2g
-      SPARK_WORKER_CORES: 2
-      SPARK_WORKER_MEMORY: 2g
-    volumes:
-      - spark-data:/bitnami
-    depends_on:
-      spark-master:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
   # Datagen
   pg-datagen:
-    build: ./infra/datagen/pg_datagen
+    build: docker-containers/datagen/pg_datagen
     container_name: pg-datagen
     depends_on:
       postgresql:
@@ -259,25 +242,25 @@ services:
       PG_DATAGEN_NUM_REVIEWS: ${PG_DATAGEN_NUM_REVIEWS}
       PG_DATAGEN_NUM_LOYALTY_POINTS: ${PG_DATAGEN_NUM_LOYALTY_POINTS}
     volumes:
-      - ./code/datagen/datagen_postgres:/app/src
+      - ./python-scripts/datagen/datagen_postgres:/app/src
     deploy:
       resources:
         limits:
           cpus: '0.5'
           memory: 512M
 
-  kafka-datagen:
-    build: ./infra/datagen/kafka_datagen
-    container_name: kafka-datagen
+  kafka-producer:
+    build: docker-containers/datagen/kafka_producer
+    container_name: kafka-producer
     depends_on:
       kafka-init:
         condition: service_completed_successfully
     environment:
-      << : *kafka-common-env
+      << : [*kafka-common-env, *pg-connect]
       # Параметры генерации
       KAFKA_DATAGEN_PERIOD_SECS: ${KAFKA_DATAGEN_PERIOD_SECS}
     volumes:
-    - ./code/datagen/kafka_datagen:/app/src
+    - ./python-scripts/datagen/kafka_producer:/app/src
     deploy:
       resources:
         limits:
@@ -286,7 +269,7 @@ services:
 
   # Airflow
   airflow-init:
-    build: ./infra/airflow/init
+    build: docker-containers/airflow/init
     container_name: airflow-init
     depends_on:
       postgresql:
@@ -304,8 +287,9 @@ services:
     environment:
       <<: [*airflow-common-env, *pg-connect, *mysql-connect]
     volumes:
-    - ./code/airflow/dags:/opt/airflow/dags
-    - ./code/airflow/scripts:/opt/airflow/scripts
+    - ./python-scripts/airflow/dags:/opt/airflow/dags
+    - ./python-scripts/airflow/scripts:/opt/airflow/scripts
+    - ./logs/airflow:/opt/airflow/logs
     deploy:
       resources:
         limits:
@@ -313,7 +297,7 @@ services:
           memory: 512M
 
   airflow-scheduler:
-    build: ./infra/airflow/scheduler
+    build: docker-containers/airflow/scheduler
     container_name: airflow-scheduler
     environment:
       <<: [*airflow-common-env, *kafka-common-env]
@@ -322,8 +306,9 @@ services:
       airflow-init:
         condition: service_completed_successfully
     volumes:
-    - ./code/airflow/dags:/opt/airflow/dags
-    - ./code/airflow/scripts:/opt/airflow/scripts
+    - ./python-scripts/airflow/dags:/opt/airflow/dags
+    - ./python-scripts/airflow/scripts:/opt/airflow/scripts
+    - ./logs/airflow:/opt/airflow/logs
     deploy:
       resources:
         limits:
@@ -331,7 +316,7 @@ services:
           memory: 1G
 
   airflow-webserver:
-    build: ./infra/airflow/webserver
+    build: docker-containers/airflow/webserver
     container_name: airflow-webserver
     environment:
       <<: *airflow-common-env
@@ -342,13 +327,43 @@ services:
       airflow-init:
         condition: service_completed_successfully
     volumes:
-    - ./code/airflow/dags:/opt/airflow/dags
-    - ./code/airflow/scripts:/opt/airflow/scripts
+    - ./python-scripts/airflow/dags:/opt/airflow/dags
+    - ./python-scripts/airflow/scripts:/opt/airflow/scripts
+    - ./logs/airflow:/opt/airflow/logs
     deploy:
       resources:
         limits:
           cpus: '1'
           memory: 1G
+  # Контейнер для разработки на Python + JupyterNotebooks внутри Docker-Compose
+  dev:
+    build: docker-containers/python-dev
+    container_name: python-dev
+    environment:
+        <<: [ *pg-connect, *mysql-connect, *airflow-common-env, *spark-common-env, *kafka-common-env ]
+        PYSPARK_PYTHON: python  # Указываем интерпретатор Python для Spark
+        PYSPARK_DRIVER_PYTHON: python
+    ports:
+        - "9100:8000"  # Порт для разработки
+        - "8888:8888"  # Порт для Jupyter
+    volumes:
+        - ./python-scripts/python-dev:/app  # Основная директория кода
+        - ./logs/python-dev:/app/logs  # Логи разработки
+        - ./python-scripts/python-dev/notebooks:/app/notebooks  # Для Jupyter notebooks
+    depends_on:
+        postgresql:
+          condition: service_started
+        mysql:
+          condition: service_started
+        kafka:
+          condition: service_started
+        spark-master:
+          condition: service_started
+        airflow-webserver:
+          condition: service_started
+    stdin_open: true
+    tty: true
+    command: [ "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root" ]
 
 volumes:
   postgresql-data:
